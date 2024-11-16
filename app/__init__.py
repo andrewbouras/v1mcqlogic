@@ -12,12 +12,22 @@ from utils.task_queue import TaskQueue
 from app.task_manager import InMemoryTaskManager
 from app.routes.similar import similar_bp
 from app.routes.prompts import prompts_bp
+from dotenv import load_dotenv
 
 def create_app(config_class=Config):
     app = Flask(__name__)
     CORS(app, resources={r"/*": {"origins": "*"}})
     app.config.from_object(config_class)
     app.task_manager = InMemoryTaskManager()
+
+    # Load environment variables
+    load_dotenv()
+    
+    # Configure Azure OpenAI settings
+    app.config['AZURE_OPENAI_KEY'] = os.getenv('AZURE_OPENAI_KEY')
+    app.config['AZURE_OPENAI_ENDPOINT'] = os.getenv('AZURE_OPENAI_ENDPOINT')
+    app.config['AZURE_OPENAI_VERSION'] = os.getenv('AZURE_OPENAI_VERSION')
+    app.config['AZURE_OPENAI_DEPLOYMENT'] = os.getenv('AZURE_OPENAI_DEPLOYMENT')
 
     # Initialize TaskQueue
     app.task_queue = TaskQueue()
@@ -35,7 +45,7 @@ def create_app(config_class=Config):
     app.register_blueprint(index_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(task_status_bp)
-    app.register_blueprint(generate_bp)
+    app.register_blueprint(generate_bp, url_prefix='/api')
     app.register_blueprint(progress_bp)
     app.register_blueprint(similar_bp)
     app.register_blueprint(prompts_bp)  # Register the new prompts blueprint
@@ -53,3 +63,5 @@ def create_app(config_class=Config):
         return jsonify({"error": "Internal server error"}), 500
 
     return app
+
+app = create_app()

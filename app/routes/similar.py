@@ -5,20 +5,28 @@ import logging
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from utils.azure_config import call_azure_api
-from utils.rate_limiter import AdaptiveRateLimiter
 import json
 import json5
-import requests  # Import requests library
+import requests
 from app.utils import get_configuration, get_prompt
-from utils.azure_config import call_azure_api  # Ensure these imports are correct based on your project structure
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 similar_bp = Blueprint('similar', __name__)
 
-# Initialize the sentence transformer model
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Initialize model as None first - we'll load it when needed
+model = None
+
+def get_model():
+    global model
+    if model is None:
+        try:
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+        except Exception as e:
+            logging.error(f"Error loading sentence transformer model: {str(e)}")
+            return None
+    return model
 
 def get_relevant_content(context, question, answers, explanation, num_sentences=5):
     query = f"{question} {' '.join(answers)} {explanation}"
@@ -33,13 +41,34 @@ def get_relevant_content(context, question, answers, explanation, num_sentences=
 @similar_bp.route('/similar', methods=['POST'])
 def generate_similar_questions():
     data = request.json
+    # Existing fields
     num_questions = data.get('num_questions')
     style = data.get('style')
     question = data.get('question')
     text = data.get('text')
     bold = data.get('bold')
+    # New fields
+    notebook_ID = data.get('notebook_ID')
+    user_ID = data.get('user_ID')
+    chapter_ID = data.get('chapter_ID')
+    question_ID = data.get('question_ID')
+    answerChoices = data.get('answerChoices')
+    explanation = data.get('explanation')
+    concept = data.get('concept')
+    # Validate required fields (as needed)
+    # ...
 
-    prompt_data = get_prompt("generate_similar_questions")
+    # Revert to original prompt handling
+    prompt_template = get_prompt("generate_similar_questions")
+    if not isinstance(prompt_template, dict):
+        raise ValueError("Invalid prompt template configuration")
+
+    # Get the prompt text from the template - look for regular_prompt instead of prompt_text
+    prompt_text = prompt_template.get('regular_prompt')
+    if not prompt_text:
+        logging.error(f"Available keys in prompt template: {prompt_template.keys()}")
+        raise ValueError("Prompt template is missing required 'regular_prompt' field")
+
     style_config = get_configuration("question_styles")
     bolding_config = get_configuration("bolding_options")
 
@@ -55,7 +84,7 @@ def generate_similar_questions():
     if not bolding_details:
         raise ValueError(f"Invalid bolding option: {bold_str}")
     
-    prompt = prompt_data["prompt_text"].format(
+    prompt = prompt_text.format(
         num_questions=num_questions,
         style=style,
         question=question,
@@ -104,16 +133,24 @@ def generate_similar_questions():
     import uuid
     response_id = str(uuid.uuid4())
 
-    final_result = {"ID": response_id, "questions": questions_data['questions']}
+    # Update the final result structure to include all necessary fields
+    final_result = {
+        "notebook_ID": data.get('notebook_ID'),
+        "user_ID": data.get('user_ID'),
+        "chapter_ID": data.get('chapter_ID'),
+        "question_ID": data.get('question_ID'),
+        "questions": questions_data.get('questions', [questions_data] if isinstance(questions_data, dict) else [])
+    }
     logging.debug(f"Final result before formatting: {final_result}")
 
-    # Send generated questions to the specified endpoint
-    webhook_url = "https://webhook.site/08537c49-227d-4c6f-bf13-de1fad2c353f"
-    webhook_response = requests.post(webhook_url, json=final_result)
-    
-    if webhook_response.status_code == 200:
+    # Update webhook URL and error handling
+    webhook_url = current_app.config.get('WEBHOOK_URL', 'https://backend.thenotemachine.com/api')
+    try:
+        webhook_response = requests.post(webhook_url, json=final_result, timeout=10)
+        webhook_response.raise_for_status()
         logging.info("Successfully sent the content to the webhook endpoint.")
-    else:
-        logging.error(f"Failed to send the content to the webhook endpoint. Status code: {webhook_response.status_code}")
-
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to send content to webhook: {str(e)}")
+        # Continue execution to return response to client even if webhook fails
+    
     return jsonify(final_result)

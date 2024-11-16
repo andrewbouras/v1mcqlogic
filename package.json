@@ -1,0 +1,11 @@
+{
+  "name": "v1mcqlogic",
+  "version": "1.0.0",
+  "description": "MCQ Generation Logic",
+  "scripts": {
+    "predev": "pip install -r requirements.txt",
+    "dev": "python run.py",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "private": true
+}

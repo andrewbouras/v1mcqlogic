@@ -17,7 +17,7 @@ class CustomJSONEncoder(JSONEncoder):
         except TypeError:
             return str(obj)
 
-generate_bp = Blueprint('generate', __name__)
+generate_bp = Blueprint('generate', __name__, url_prefix='/api')
 
 def generate_intro_questions(statements, question_style, use_bolding, config):
     prompt_data = get_prompt("generate_mcqs")
@@ -235,35 +235,11 @@ def generate():
                     questions_data['questions'].extend(additional_questions['questions'])
                 questions_data['questions'] = questions_data['questions'][:num_questions]
 
-        final_result = questions_data  # Use the result directly
+        final_result = questions_data  # Contains "ID" and "questions"
 
-        logging.info(f"Final result before sending to webhook: {final_result}")
-
-        # Send generated questions to the webhook
-        webhook_url = "https://webhook.site/681b6610-35d6-4604-8461-ce1812d4bc3e"
-        json_safe_result = {
-            "ID": final_result["ID"],
-            "questions": [
-                {
-                    "question": q.get("question", ""),
-                    "answerChoices": sorted(
-                        [
-                            {
-                                "value": choice["value"] if isinstance(choice, dict) else str(choice),
-                                "correct": choice.get("correct", False) if isinstance(choice, dict) else False
-                            }
-                            for choice in q.get("answerChoices", [])
-                        ],
-                        key=lambda x: x['value'].lower()
-                    ),
-                    "explanation": q.get("explanation", ""),
-                    "concept": q.get("concept", "")
-                }
-                for q in final_result["questions"]
-            ]
-        }
-        
-        response = requests.post(webhook_url, json=json_safe_result)
+        # Send generated questions to the specified endpoint
+        webhook_url = "https://backend.thenotemachine.com/api"  # Replace with your webhook URL
+        response = requests.post(webhook_url, json=final_result)
         if response.status_code == 200:
             logging.info(f"Successfully sent questions for task {task_id} to webhook")
         else:

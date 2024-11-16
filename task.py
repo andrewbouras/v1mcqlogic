@@ -9,7 +9,7 @@ from utils.rate_limiter import AdaptiveRateLimiter
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
 
-WEBHOOK_URL = "https://webhook.site/71b35bad-c81e-4e4f-8652-d2ef16f20a8b"
+WEBHOOK_URL = "https://backend.thenotemachine.com/api"
 
 class InMemoryTaskManager:
     def __init__(self):
